@@ -15,12 +15,6 @@ Important Files/Folder in this repo:
     * display_incorrect_pred: Show misclassified images
     * show_sample: Show sample images
     * process_dataset: Apply transformations to dataset
-    * plot_acc_loss: Plot accuracy & Loss curve
-    * find_lr: Find LR 
-    * Class GradCAM: GradCAM class 
-    * generate_gradcam: Generate GradCam for layers
-    * plot_gradcam: Show GradCam generated images    
+    * plot_acc_loss: Plot accuracy & Loss curve   
   * models folder
-    * resnet.py [link](models/resnet.py): It contains Resnet18 & Resnet34 definition
     * custom_resnet.py [link](models/custom_resnet.py): It contains custom Resnet definition
-    * model9.py [link](models/model9.py): It contains basic transformer definition
