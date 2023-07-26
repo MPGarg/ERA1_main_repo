@@ -28,7 +28,7 @@ def tl_ts_mod(transform_train,transform_valid,batch_size=128):
     return trainset,trainloader,testset,testloader
 
 def set_albumen_params(mean, std):
-    horizontalflip_prob= 0.2
+    horizontalflip_prob= 0.25
     rotate_limit= 15
     shiftscalerotate_prob= 0.25
     num_holes= 1
@@ -38,7 +38,8 @@ def set_albumen_params(mean, std):
 
     transform_train = A.Compose(
         [
-        #A.RandomCrop(height=16,width=16),
+        A.PadIfNeeded(min_height=36, min_width=36),
+        A.RandomCrop(width=32, height=32,always_apply=False),
         A.HorizontalFlip(p=horizontalflip_prob),
         A.CoarseDropout(max_holes=num_holes,min_holes = 1, max_height=max_height, max_width=max_width, 
         p=cutout_prob,fill_value=tuple([x * 255.0 for x in mean]),
