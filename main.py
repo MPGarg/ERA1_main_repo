@@ -15,7 +15,7 @@ test_losses = []
 train_acc = []
 test_acc = []
 
-def train(model, device, train_loader, optimizer, epoch, train_losses, train_acc, lambda_l1=0):
+def train(model, device, train_loader, optimizer, epoch, train_losses, train_acc, lambda_l1=0,sched_fl=" ",scheduler=None):
 
     model.train()
     pbar = tqdm(train_loader)
@@ -51,7 +51,9 @@ def train(model, device, train_loader, optimizer, epoch, train_losses, train_acc
         optimizer.step()
 
         # Update pbar-tqdm
-        
+        if sched_fl == 'X':
+            scheduler.step()
+            
         pred = y_pred.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
         correct += pred.eq(target.view_as(pred)).sum().item()   
     
@@ -108,7 +110,7 @@ def train_test_model(model, trainloader, testloader, norm_type='BN', EPOCHS=20, 
         scheduler = StepLR(optimizer, step_size=100, gamma=0.25)    
         sched_fl = 'X'
     elif sched == 'OneCycle':
-        scheduler = OneCycleLR(optimizer=optimizer, max_lr=0.05, epochs=EPOCHS, steps_per_epoch=len(trainloader), pct_start=5/EPOCHS, div_factor=10) 
+        scheduler = OneCycleLR(optimizer=optimizer, max_lr=lr, epochs=EPOCHS, steps_per_epoch=len(trainloader), pct_start=5/EPOCHS, div_factor=10,three_phase=False) 
         sched_fl = 'X'
     else:
         sched_fl = ' '
@@ -117,10 +119,7 @@ def train_test_model(model, trainloader, testloader, norm_type='BN', EPOCHS=20, 
     
     for epoch in range(EPOCHS):
         print("EPOCH:", epoch+1)
-        train(model, device, trainloader, optimizer, epoch, train_losses, train_acc, lambda_l1)
-
-        if sched_fl == 'X':
-            scheduler.step()
+        train(model, device, trainloader, optimizer, epoch, train_losses, train_acc, lambda_l1,sched_fl,scheduler)        
 
         eval_test_acc = test(model, device, testloader, test_losses, test_acc, epoch)
         if(eval_test_acc >= target_acc):
