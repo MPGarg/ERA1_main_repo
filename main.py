@@ -15,7 +15,7 @@ test_losses = []
 train_acc = []
 test_acc = []
 
-def train(model, device, train_loader, optimizer, epoch, train_losses, train_acc,criterion,scheduler, lr_trend, lambda_l1=0):
+def train(model, device, train_loader, optimizer, epoch, train_losses, train_acc, lambda_l1=0):
 
     model.train()
     pbar = tqdm(train_loader)
@@ -36,7 +36,7 @@ def train(model, device, train_loader, optimizer, epoch, train_losses, train_acc
         y_pred = model(data)
 
         # Calculate loss
-        loss = criterion(y_pred, target)
+        loss = F.cross_entropy(y_pred, target)
 
         if(lambda_l1 > 0):
             l1 = 0
@@ -50,11 +50,6 @@ def train(model, device, train_loader, optimizer, epoch, train_losses, train_acc
         loss.backward()
         optimizer.step()
 
-        # updating LR
-        if scheduler:
-            if not isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                scheduler.step()
-                lr_trend.append(scheduler.get_last_lr()[0])
         # Update pbar-tqdm
         
         pred = y_pred.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
@@ -65,7 +60,7 @@ def train(model, device, train_loader, optimizer, epoch, train_losses, train_acc
 
     print(f'\nAverage Training Loss={train_loss/len(train_loader.dataset)}, Accuracy={100*correct/len(train_loader.dataset)}')
 
-def test(model, device, test_loader,test_losses, test_acc,epoch,criterion,target_acc=95,save_file=''):
+def test(model, device, test_loader,test_losses, test_acc,epoch,target_acc=95,save_file=''):
     model.eval()
     test_loss = 0
     correct = 0
@@ -73,7 +68,7 @@ def test(model, device, test_loader,test_losses, test_acc,epoch,criterion,target
         for data, target in test_loader:
             data, target = data.to(device), target.to(device)
             output = model(data)
-            test_loss += criterion(output, target).item()  # sum up batch loss
+            test_loss += F.cross_entropy(output, target).item()  # sum up batch loss
             pred = output.argmax(dim=1, keepdim=True)  # get the index of the max log-probability
             correct += pred.eq(target.view_as(pred)).sum().item()
 
@@ -94,24 +89,43 @@ def test(model, device, test_loader,test_losses, test_acc,epoch,criterion,target
     test_acc.append(100. * correct / len(test_loader.dataset))
     return accuracy_epoch
 
-def fit_model(model, optimizer, criterion, trainloader, testloader, EPOCHS, device,lambda_l1=0,target_acc=100,scheduler=None):
+def train_test_model(model, trainloader, testloader, norm_type='BN', EPOCHS=20, lr=0.001, device='cuda',sched='StepLR',lambda_l1=0,target_acc=90,optim='SGD'):
     wrong_prediction_list = []
-    right_prediction_list = []
     train_losses = []
     train_acc = []
     test_losses = []
     test_acc = []
 
-    lr_trend = []
+    #torch.manual_seed(42)
+    if optim == 'SGD':
+        optimizer = SGD(model.parameters(), lr=lr, momentum=0.9)
+    elif optim == 'ADAM':
+        optimizer = Adam(model.parameters(), lr=lr, betas=(0.9, 0.999))
+    else:
+        optimizer = SGD(model.parameters(), lr=lr, momentum=0.9)      #fallback if nothing given
+
+    if sched == 'StepLR':
+        scheduler = StepLR(optimizer, step_size=100, gamma=0.25)    
+        sched_fl = 'X'
+    elif sched == 'OneCycle':
+        scheduler = OneCycleLR(optimizer=optimizer, max_lr=0.05, epochs=EPOCHS, steps_per_epoch=len(trainloader), pct_start=5/EPOCHS, div_factor=10) 
+        sched_fl = 'X'
+    else:
+        sched_fl = ' '
+
+    lambda_l1 = lambda_l1
     
     for epoch in range(EPOCHS):
-        print("EPOCH: {} (LR: {})".format(epoch+1, optimizer.param_groups[0]['lr']))
-        train(model, device, trainloader, optimizer, epoch, train_losses, train_acc, criterion,scheduler,lr_trend, lambda_l1)
+        print("EPOCH:", epoch+1)
+        train(model, device, trainloader, optimizer, epoch, train_losses, train_acc, lambda_l1)
 
-        eval_test_acc = test(model, device, testloader, test_losses, test_acc, epoch, criterion)
+        if sched_fl == 'X':
+            scheduler.step()
+
+        eval_test_acc = test(model, device, testloader, test_losses, test_acc, epoch)
         if(eval_test_acc >= target_acc):
             break
-
+    
     model.eval()
     for images, labels in testloader:
         images, labels = images.to(device), labels.to(device)
@@ -121,8 +135,6 @@ def fit_model(model, optimizer, criterion, trainloader, testloader, EPOCHS, devi
         for j, i in enumerate(match):
             if(i == False):
                 wrong_prediction_list.append((images[j], pred[j].item(), labels[j].item()))
-            else:
-                right_prediction_list.append((images[j], pred[j].item(), labels[j].item()))
 
-    print(f'Total Number of incorrectly predicted images by model is {len(wrong_prediction_list)}')
-    return model, wrong_prediction_list, right_prediction_list, train_losses, train_acc, test_losses, test_acc
+    print(f'Total Number of incorrectly predicted images by model type {norm_type} is {len(wrong_prediction_list)}')
+    return model, wrong_prediction_list, train_losses, train_acc, test_losses, test_acc
